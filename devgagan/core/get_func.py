@@ -393,7 +393,6 @@ async def get_msg(userbot, sender, edit_id, msg_link, i, message):
                             attributes=[DocumentAttributeVideo(duration=duration, w=width, h=height, supports_streaming=True)],
                             thumb=thumb_path
                         )
-                    # In either branch, after upload, remove the file.
                     if os.path.exists(file):
                         os.remove(file)
                     file = None
@@ -520,7 +519,12 @@ async def get_msg(userbot, sender, edit_id, msg_link, i, message):
     else:
         edit = await app.edit_message_text(sender, edit_id, "Cloning by Crushe...")
         try:
-            chat = msg_link.split("/")[-2]
+            # Modified to handle public group links:
+            if 't.me/' in msg_link and 't.me/c/' not in msg_link and 't.me/b/' not in msg_link:
+                chat_name = msg_link.split('/')[-2]
+                chat = (await userbot.get_chat(f"@{chat_name}")).id
+            else:
+                chat = msg_link.split("/")[-2]
             await copy_message_with_chat_id(app, sender, chat, msg_id)
             await edit.delete()
         except Exception as e:
@@ -846,5 +850,3 @@ async def add_pdf_watermark(input_pdf, output_pdf_path, watermark_text):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, add_pdf_watermark_sync, input_pdf, output_pdf_path, watermark_text)
     return result
-
-# Code completed
