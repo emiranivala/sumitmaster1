@@ -517,15 +517,49 @@ async def get_msg(userbot, sender, edit_id, msg_link, i, message):
             print(f"Errrrror {e}")
             await edit.delete()
     else:
+        # Modified else branch for public/private group links:
         edit = await app.edit_message_text(sender, edit_id, "Cloning by Crushe...")
         try:
-            # Modified to handle public group links:
             if 't.me/' in msg_link and 't.me/c/' not in msg_link and 't.me/b/' not in msg_link:
                 chat_name = msg_link.split('/')[-2]
                 chat = (await userbot.get_chat(f"@{chat_name}")).id
+                # For public groups, use the original message ID (without offset)
+                msg_id = int(msg_link.split("/")[-1])
             else:
                 chat = msg_link.split("/")[-2]
-            await copy_message_with_chat_id(app, sender, chat, msg_id)
+            # Inline the copy logic instead of calling copy_message_with_chat_id:
+            target_chat_id = user_chat_ids.get(sender, sender)
+            msg = await userbot.get_messages(chat, msg_id)
+            custom_caption = get_user_caption_preference(sender)
+            original_caption = msg.caption if msg.caption else ''
+            final_caption = f"{original_caption}" if custom_caption else f"{original_caption}"
+            delete_words = load_delete_words(sender)
+            for word in delete_words:
+                final_caption = final_caption.replace(word, '  ')
+            replacements = load_replacement_words(sender)
+            for word, replace_word in replacements.items():
+                final_caption = final_caption.replace(word, replace_word)
+            caption = f"{final_caption}\n\n__**{custom_caption}**__" if custom_caption else f"{final_caption}"
+            if msg.media:
+                if msg.media == MessageMediaType.VIDEO:
+                    result = await userbot.send_video(target_chat_id, msg.video.file_id, caption=caption)
+                elif msg.media == MessageMediaType.DOCUMENT:
+                    result = await userbot.send_document(target_chat_id, msg.document.file_id, caption=caption)
+                elif msg.media == MessageMediaType.PHOTO:
+                    result = await userbot.send_photo(target_chat_id, msg.photo.file_id, caption=caption)
+                else:
+                    result = await userbot.copy_message(target_chat_id, chat, msg_id)
+            else:
+                result = await userbot.copy_message(target_chat_id, chat, msg_id)
+            try:
+                await result.copy(LOG_GROUP)
+            except Exception:
+                pass
+            if msg.pinned_message:
+                try:
+                    await result.pin(both_sides=True)
+                except Exception as e:
+                    await result.pin()
             await edit.delete()
         except Exception as e:
             await app.edit_message_text(sender, edit_id, f'Failed to save: `{msg_link}`\n\nError: {str(e)}')
